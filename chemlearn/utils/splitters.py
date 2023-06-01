@@ -131,7 +131,7 @@ def scaffold_to_smiles(smiles: List[str],
 
 class ScaffoldSplitter(Splitter):
     """
-    Splits a :class:`~SophosDataset` by scaffold so that no molecules sharing a scaffold are in different splits.
+    Splits a :class:`~MolDataset` by scaffold so that no molecules sharing a scaffold are in different splits.
     Parameters
     ----------
     test_size
@@ -165,7 +165,7 @@ class ScaffoldSplitter(Splitter):
     def split(self, data):
 
         if not hasattr(data, 'smiles'):
-            raise AttributeError(f'Attribute smiles is missing from input. Please provide a valid SophosDataset.')
+            raise AttributeError(f'Attribute smiles is missing from input. Please provide a valid MolDataset.')
 
         smiles = data.__getattribute__('smiles')
         random_state = check_random_state(self.random_state)
