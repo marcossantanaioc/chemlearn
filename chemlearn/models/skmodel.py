@@ -1,10 +1,13 @@
 import copy
 import logging
-from typing import Dict
+from typing import Dict, Iterator, Union
 import dill as pickle
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 from sklearn.base import is_classifier
-from chemlearn.data.dataset import MolDataset
+from chemlearn.data.dataset import MolDataset, PandasDataset
+from chemlearn.utils.splitters import CrossValidationSplitter, Splitter
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -105,10 +108,12 @@ class ChemLearner:
             Whether the dataset is for a regression or classification task, based on `dtype`.
         """
 
-    def __init__(self, model, dataset: MolDataset):
+    def __init__(self, model, dataset: MolDataset, metric):
 
         self.model = ChemSklearnModel(model)
         self.dataset = dataset
+        self.metric = metric
+        self.metric_name = metric.metric.__name__
         self.target_variable = getattr(dataset, 'target_variable')
         self.train_data = getattr(dataset, 'train_data')
         self.valid_data = getattr(dataset, 'valid_data')
@@ -119,20 +124,90 @@ class ChemLearner:
         self.classes = getattr(dataset, 'classes', None)
 
     def get_data(self, data: MolDataset, return_target: bool = True):
-        x = np.stack(data.data['features'])
+        if isinstance(data, (MolDataset, PandasDataset)):
+            data = data.data
+        x = np.stack(data['features'])
         if return_target:
-            y = np.stack(data.data[self.target_variable])
-            return x, y
+            return x, np.stack(data[self.target_variable])
         return x
 
-    def fit(self, params: Dict = {}):
-        x, y = self.get_data(self.train_data)
+    def fit(self, x, y, params: Dict = {}):
         if params:
             self.model.set_params(params)
         self.model.fit(x, y)
         return self
 
-    def predict(self, data: MolDataset):
+    def predict(self, data: Union[MolDataset, PandasDataset, Dict]):
         x = self.get_data(data, return_target=False)
         return self.model.predict(x)
 
+    def cross_val(self,
+                  splitter: Splitter,
+                  n_splits: int = 5,
+                  test_size: float = 0.2,
+                  random_state: int = None, params: Dict = None, **kwargs):
+
+        """Performs k-fold cross-validation.
+
+        Arguments
+        ------------------------------------------------------------------------------------------------------------
+
+            data : MolDataset
+                A MolDataset object
+
+            cv_iterator : Iterator
+                An iterator to generate cross-validation folds
+
+            n_splits : int
+                The number of cross-validation folds
+
+            test_size : float
+                The percentage of data to be used as test set
+
+            random_state : int
+                A random seed for reproducible results
+
+        Returns
+        ------------------------------------------------------------------------------------------------------------
+
+            cv_results : `pandas.DataFrame`
+                Summary of predictive performance.
+        """
+        cv_iterator = CrossValidationSplitter(splitter(test_size=test_size,
+                                                       random_state=random_state),
+                                              n_splits=n_splits)
+
+        if params:
+            self.model.set_params(params)
+
+        gather_metrics = {self.metric_name: [], 'Fold': []}
+
+        logger.info('Performing cross-validation\nParameters:')
+        logger.info(f'splits = {n_splits}')
+        logger.info(f'iterator = {splitter.__class__.__name__}')
+
+        for fold, (train_split, valid_split) in tqdm(enumerate(cv_iterator.split(self.train_data)), total=n_splits):
+            xtrain, ytrain = self.get_data(self.train_data[train_split])
+
+            logger.info(f'Fitting on fold {fold}')
+            logger.info(f'Training on {len(train_split)} samples.')
+            logger.info(f'Validating on {len(valid_split)} samples.')
+
+            self.fit(x=xtrain, y=ytrain)
+
+            logger.info(f'Finished fold {fold}')
+
+            preds = self.predict(self.train_data[valid_split])
+            yvalid = self.train_data[valid_split][self.target_variable]
+
+            score = self.metric.score(yvalid, preds)
+            gather_metrics[self.metric_name].append(score)
+            gather_metrics['Fold'].append(fold)
+
+        cv_results = pd.DataFrame(gather_metrics)
+
+        logger.debug(cv_results)
+        logger.debug(f'##################################################################')
+        logger.info(f'##################################################################')
+
+        return cv_results
