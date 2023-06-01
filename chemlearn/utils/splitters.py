@@ -33,13 +33,12 @@ class TrainTestSplitter(Splitter):
         return {'train_idx': train, 'valid_idx': valid}
 
 
-class CrossValidationSplitterer:
+class CrossValidationSplitter:
     """A Splitter to convert splitters into iterators"""
 
     def __init__(self, splitter, n_splits: int = 10, random_state: int = None):
         self.splitter = splitter
         self.n_splits = n_splits
-        self.random_state = check_random_state(random_state)
 
     def split(self, data):
         """Returns a split generator."""
@@ -47,7 +46,8 @@ class CrossValidationSplitterer:
         # random = check_random_state(self.random_state)
 
         while k < self.n_splits:
-            train_idx, valid_idx = self.splitter(**self.__dict__)(data)
+            folds = self.splitter.split(data)
+            train_idx, valid_idx = folds['train_idx'], folds['valid_idx']
             yield train_idx, valid_idx
             k += 1
 
