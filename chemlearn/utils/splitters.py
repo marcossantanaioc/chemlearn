@@ -36,7 +36,7 @@ class TrainTestSplitter(Splitter):
 class CrossValidationSplitter:
     """A Splitter to convert splitters into iterators"""
 
-    def __init__(self, splitter, n_splits: int = 10, random_state: int = None):
+    def __init__(self, splitter, n_splits: int = 10):
         self.splitter = splitter
         self.n_splits = n_splits
 

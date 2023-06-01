@@ -134,6 +134,10 @@ class MolDataset(PandasDataset):
         return self.dataset
 
     @property
+    def all_idx(self):
+        return list(range(len(dataset)))
+
+    @property
     def train_idx(self):
         return self.splits['train_idx']
 
