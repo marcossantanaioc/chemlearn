@@ -1,19 +1,19 @@
 import copy
 import datetime
-from typing import Union
+from typing import Union, Dict, List, Optional, Any, Sized
 import dill as pickle
 import pandas as pd
 from cheminftools.tools.featurizer import MolFeaturizer
 from sklearn.utils.multiclass import type_of_target, unique_labels
 from chemlearn.utils.splitters import Splitter
 
-TARGET2TYPE = {'continuous': 'regression',
-               'binary': 'classification',
-               'continuous-multioutput': 'regression-multi',
-               'multiclass': 'multiclass',
-               'multilabel-indicator': 'multilabel'}
+TARGET2TYPE: Dict = {'continuous': 'regression',
+                     'binary': 'classification',
+                     'continuous-multioutput': 'regression-multi',
+                     'multiclass': 'multiclass',
+                     'multilabel-indicator': 'multilabel'}
 
-TYPE2TARGET = {v: k for k, v in TARGET2TYPE.items()}
+TYPE2TARGET: Dict = {v: k for k, v in TARGET2TYPE.items()}
 
 
 class PandasDataset:
@@ -41,6 +41,7 @@ class PandasDataset:
         Whether the dataset is for a regression or classification task,
         based on `dtype`.
     """
+
     def __init__(self, df: pd.DataFrame, smiles_column: str, target_variable: str, featurizer: MolFeaturizer):
         self.df = df
         self.featurizer = featurizer
@@ -64,6 +65,7 @@ class PandasDataset:
         """
         if self.job_type in ['classification', 'multiclass']:
             return unique_labels(self.df[self.target_variable])
+        return None
 
     @property
     def c(self):
@@ -78,11 +80,12 @@ class PandasDataset:
         """
         if self.job_type in ['classification', 'multiclass']:
             return len(self.classes)
+        return None
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idxs):
+    def __getitem__(self, idxs: Union[List[int], int]) -> Dict:
         res = {key: self.data[key][idxs] for key in self.data.keys()}
         return res
 
@@ -120,7 +123,7 @@ class MolDataset(PandasDataset):
         based on `dtype`.
     """
 
-    def __init__(self, data_path: Union, smiles_column: str, target_variable: str, featurizer: MolFeaturizer,
+    def __init__(self, data_path: str, smiles_column: str, target_variable: str, featurizer: MolFeaturizer,
                  splitter: Splitter):
         super().__init__(pd.read_csv(data_path), smiles_column=smiles_column, target_variable=target_variable,
                          featurizer=featurizer)
@@ -130,19 +133,19 @@ class MolDataset(PandasDataset):
         self.splits = splitter.split(self.df)
 
     @property
-    def all(self):
+    def all(self) -> PandasDataset:
         return self.dataset
 
     @property
-    def all_idx(self):
-        return list(range(len(dataset)))
+    def all_idx(self) -> List[int]:
+        return list(range(len(self.dataset)))
 
     @property
-    def train_idx(self):
+    def train_idx(self) -> Dict[str, int]:
         return self.splits['train_idx']
 
     @property
-    def valid_idx(self):
+    def valid_idx(self) -> Dict[str, int]:
         return self.splits['valid_idx']
 
     @property

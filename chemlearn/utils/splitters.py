@@ -1,12 +1,12 @@
 import numbers
 from collections import defaultdict
-from typing import Collection, Union, List, Dict, Set
+from typing import Collection, Union, List, Dict, Set, Optional
 import numpy as np
 from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmilesFromSmiles
 
 
 class Splitter:
-    def __init__(self, test_size: float = 0.2, random_state: int = None, **kwargs):
+    def __init__(self, test_size: float = 0.2, random_state: Optional[int] = None, **kwargs):
         self.test_size = test_size
         self.train_size = 1 - test_size
         self.random_state = random_state
@@ -22,8 +22,8 @@ class TrainTestSplitter(Splitter):
 
     def __init__(self,
                  test_size: float = 0.2,
-                 random_state: int = None,
-                 stratify: np.ndarray = None,
+                 random_state: Optional[int] = None,
+                 stratify: Optional[np.ndarray] = None,
                  shuffle: bool = True):
         super().__init__(test_size=test_size, random_state=random_state, stratify=stratify, shuffle=shuffle)
 
@@ -66,7 +66,7 @@ def check_random_state(seed):
     if seed is None or seed is np.random:
         return np.random.mtrand._rand
     if isinstance(seed, numbers.Integral):
-        return np.random.RandomState(seed)
+        return np.random.RandomState(seed)  #type: ignore
     if isinstance(seed, np.random.RandomState):
         return seed
     raise ValueError('%r cannot be used to seed a numpy.random.RandomState'
@@ -76,7 +76,7 @@ def check_random_state(seed):
 class RandomSplitter(Splitter):
     """Create function that splits `items` between train/val with `valid_pct` randomly."""
 
-    def __init__(self, test_size: float = 0.2, random_state: float = None):
+    def __init__(self, test_size: float = 0.2, random_state: Optional[int] = None):
         super().__init__(test_size=test_size, random_state=random_state)
 
     def split(self, data):
@@ -93,7 +93,7 @@ class RandomSplitter(Splitter):
 class IndexSplitter(Splitter):
     """Split `items` so that `val_idx` are in the validation set and the others in the training set"""
 
-    def __init__(self, test_idx: Collection, random_state: float = None):
+    def __init__(self, test_idx: List[int], random_state: Optional[int] = None):
         super().__init__(test_size=0, random_state=random_state)
         self.test_idx = test_idx
 
@@ -118,13 +118,14 @@ def scaffold_to_smiles(smiles: List[str],
     -------
     A dictionary mapping each unique scaffold to all SMILES (or indices) which have that scaffold.
     """
-    scaffolds = defaultdict(set)
+    scaffolds = {}  #type: ignore
     for i, smi in enumerate(smiles):
         scaffold = MurckoScaffoldSmilesFromSmiles(smi)
+        scaffolds[scaffold] = set()
         if use_indices:
-            scaffolds[scaffold].add(i)
+            scaffolds[scaffold].add(i)  #type: ignore
         else:
-            scaffolds[scaffold].add(smi)
+            scaffolds[scaffold].add(smi)  #type: ignore
 
     return scaffolds
 
@@ -154,7 +155,7 @@ class ScaffoldSplitter(Splitter):
                  smiles_column: str = 'smiles',
                  n_splits: int = 10,
                  balanced: bool = True,
-                 random_state: int = 0):
+                 random_state: Optional[int] = 0):
         super().__init__(test_size=test_size, random_state=random_state, smiles_column=smiles_column)
 
         self.sizes = (1 - test_size, test_size)
@@ -172,7 +173,7 @@ class ScaffoldSplitter(Splitter):
 
         # Split
         train_size, val_size = self.sizes[0] * len(data), self.sizes[1] * len(data)
-        train, val = [], []
+        train, val = [], []  #type: ignore
         train_scaffold_count, val_scaffold_count = 0, 0
 
         # Map from scaffold to index in the data

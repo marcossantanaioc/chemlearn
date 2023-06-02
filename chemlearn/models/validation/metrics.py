@@ -1,8 +1,10 @@
-__all__ = ['sklm_to_scorer', 'R2Score', 'MSEScore', 'MAEScore', 'BalancedAccuracyScore', 'MatthewsCorrCoef',
+__all__ = ['sklm_to_scorer', 'R2Score', 'MSEScore',
+           'MAEScore', 'BalancedAccuracyScore', 'MatthewsCorrCoef',
            'PrecisionScore', 'RecallScore', 'ROCAucScore']
 
 from functools import partial
 from typing import Callable
+from numpy.typing import ArrayLike
 
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, \
     make_scorer, precision_score, recall_score, \
@@ -14,7 +16,7 @@ class Metric:
     def __init__(self, metric: Callable):
         self.metric = metric
 
-    def score(self, ytrue, ypred):
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
         return self.metric(ytrue, ypred)
 
 
@@ -58,8 +60,8 @@ class R2Score(Metric):
             return sklm_to_scorer(self.metric)
         return r2_score
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class MSEScore(Metric):
@@ -90,8 +92,8 @@ class MSEScore(Metric):
             return sklm_to_scorer(self.metric, squared=self.squared)
         return partial(self.metric, squared=self.squared)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class MAEScore(Metric):
@@ -118,8 +120,8 @@ class MAEScore(Metric):
             return sklm_to_scorer(self.metric)
         return partial(self.metric)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class BalancedAccuracyScore(Metric):
@@ -149,8 +151,8 @@ class BalancedAccuracyScore(Metric):
             return sklm_to_scorer(self.metric, adjusted=self.adjusted)
         return partial(self.metric, adjusted=self.adjusted)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class MatthewsCorrCoef(Metric):
@@ -177,8 +179,8 @@ class MatthewsCorrCoef(Metric):
             return sklm_to_scorer(self.metric)
         return partial(self.metric)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class PrecisionScore(Metric):
@@ -234,8 +236,8 @@ class PrecisionScore(Metric):
             return sklm_to_scorer(self.metric, average=self.average, pos_label=self.pos_label)
         return partial(self.metric)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class RecallScore(Metric):
@@ -290,8 +292,8 @@ class RecallScore(Metric):
             return sklm_to_scorer(self.metric, average=self.average, pos_label=self.pos_label)
         return partial(self.metric)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
 
 
 class ROCAucScore(Metric):
@@ -336,5 +338,5 @@ class ROCAucScore(Metric):
             return sklm_to_scorer(self.metric, average=self.average)
         return partial(self.metric)
 
-    def score(self, ytrue, ypred):
-        return self.metric_func(ytrue, ypred)
+    def score(self, ytrue: ArrayLike, ypred: ArrayLike) -> float:
+        return self.metric(ytrue, ypred)
