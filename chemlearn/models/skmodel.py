@@ -246,11 +246,11 @@ class ChemLearner:
 
         if hasattr(estimator, 'named_steps'):
             estimator_name = estimator.steps[-1][1].__class__.__name__
-            _estimator = estimator.steps[-1][1]
+            estimator = estimator.steps[-1][1]
 
         elif 'Chain' in estimator.__class__.__name__ and hasattr(estimator, 'base_estimator'):
             estimator_name = estimator.base_estimator.__class__.__name__
-            _estimator = getattr(estimator, 'base_estimator')
+            estimator = getattr(estimator, 'base_estimator')
 
         else:
             estimator_name = estimator.__class__.__name__
