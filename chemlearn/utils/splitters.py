@@ -1,6 +1,6 @@
 import numbers
-from collections import defaultdict
-from typing import Collection, Union, List, Dict, Set, Optional
+from typing import Union, List, Dict, Set, Optional
+
 import numpy as np
 from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmilesFromSmiles
 
@@ -66,7 +66,7 @@ def check_random_state(seed):
     if seed is None or seed is np.random:
         return np.random.mtrand._rand
     if isinstance(seed, numbers.Integral):
-        return np.random.RandomState(seed)  #type: ignore
+        return np.random.RandomState(seed)  # type: ignore
     if isinstance(seed, np.random.RandomState):
         return seed
     raise ValueError('%r cannot be used to seed a numpy.random.RandomState'
@@ -118,14 +118,14 @@ def scaffold_to_smiles(smiles: List[str],
     -------
     A dictionary mapping each unique scaffold to all SMILES (or indices) which have that scaffold.
     """
-    scaffolds = {}  #type: ignore
+    scaffolds = {}  # type: ignore
     for i, smi in enumerate(smiles):
         scaffold = MurckoScaffoldSmilesFromSmiles(smi)
         scaffolds[scaffold] = set()
         if use_indices:
-            scaffolds[scaffold].add(i)  #type: ignore
+            scaffolds[scaffold].add(i)  # type: ignore
         else:
-            scaffolds[scaffold].add(smi)  #type: ignore
+            scaffolds[scaffold].add(smi)  # type: ignore
 
     return scaffolds
 
@@ -173,7 +173,7 @@ class ScaffoldSplitter(Splitter):
 
         # Split
         train_size, val_size = self.sizes[0] * len(data), self.sizes[1] * len(data)
-        train, val = [], []  #type: ignore
+        train, val = [], []  # type: ignore
         train_scaffold_count, val_scaffold_count = 0, 0
 
         # Map from scaffold to index in the data
@@ -206,6 +206,3 @@ class ScaffoldSplitter(Splitter):
                 val_scaffold_count += 1
 
         return {'train_idx': train, 'valid_idx': val}
-
-# scaffold_splitter = ScaffoldSplitter(test_size=0.2, balanced=True)
-# print(scaffold_splitter.balanced)

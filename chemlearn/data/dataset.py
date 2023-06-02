@@ -1,10 +1,11 @@
 import copy
 import datetime
-from typing import Union, Dict, List, Optional, Any, Sized
+from typing import Union, Dict, List
 import dill as pickle
 import pandas as pd
 from cheminftools.tools.featurizer import MolFeaturizer
 from sklearn.utils.multiclass import type_of_target, unique_labels
+
 from chemlearn.utils.splitters import Splitter
 
 TARGET2TYPE: Dict = {'continuous': 'regression',
