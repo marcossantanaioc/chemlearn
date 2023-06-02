@@ -1,22 +1,48 @@
 import copy
 import datetime
-from typing import Union
+from typing import Union, Dict, List
 import dill as pickle
 import pandas as pd
 from cheminftools.tools.featurizer import MolFeaturizer
 from sklearn.utils.multiclass import type_of_target, unique_labels
+
 from chemlearn.utils.splitters import Splitter
 
-TARGET2TYPE = {'continuous': 'regression',
-               'binary': 'classification',
-               'continuous-multioutput': 'regression-multi',
-               'multiclass': 'multiclass',
-               'multilabel-indicator': 'multilabel'}
+TARGET2TYPE: Dict = {'continuous': 'regression',
+                     'binary': 'classification',
+                     'continuous-multioutput': 'regression-multi',
+                     'multiclass': 'multiclass',
+                     'multilabel-indicator': 'multilabel'}
 
-TYPE2TARGET = {v: k for k, v in TARGET2TYPE.items()}
+TYPE2TARGET: Dict = {v: k for k, v in TARGET2TYPE.items()}
 
 
 class PandasDataset:
+    """
+    Create a dataset from a pandas dataframe.
+    Attributes
+    ----------
+    df
+        Input dataframe.
+    smiles_column
+        Column in `df` with SMILES.
+    target_variable
+        Column in `df` with prediction target.
+    featurizer
+        A `MolFeaturizer` object.
+    data
+        A dictionary where each key is a column in `df`,
+        and values are the column's values.
+    columns
+        List of columns in `df`
+    dtype
+        Type of `target_variable`.
+        See [sklearn documentation for details](https://scikit-learn.org/stable/modules/generated/sklearn.utils.multiclass.type_of_target.html)
+    job_type
+        Whether the dataset is for a regression or classification task,
+        based on `dtype`.
+    """
+
     def __init__(self, df: pd.DataFrame, smiles_column: str, target_variable: str, featurizer: MolFeaturizer):
         self.df = df
         self.featurizer = featurizer
@@ -29,18 +55,38 @@ class PandasDataset:
 
     @property
     def classes(self):
+        """
+        Returns the classes in `self.data` if
+        `self.job_type` is a classification task.
+        Returns
+        -------
+        labels
+            Classes present in `self.target_variable`
+
+        """
         if self.job_type in ['classification', 'multiclass']:
             return unique_labels(self.df[self.target_variable])
+        return None
 
     @property
     def c(self):
+        """
+        Returns the number of classes in `self.data` if
+        `self.job_type` is a classification task.
+        Returns
+        -------
+        number_of_classes
+            Number of classes present in `self.target_variable`
+
+        """
         if self.job_type in ['classification', 'multiclass']:
             return len(self.classes)
+        return None
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idxs):
+    def __getitem__(self, idxs: Union[List[int], int]) -> Dict:
         res = {key: self.data[key][idxs] for key in self.data.keys()}
         return res
 
@@ -54,10 +100,31 @@ class PandasDataset:
 
 class MolDataset(PandasDataset):
     """
-    Creates a dataset with molecular data.
+    Creates a dataset ready for modeling with molecular data.
+    Attributes
+    ----------
+    df
+        Input dataframe.
+    smiles_column
+        Column in `df` with SMILES.
+    target_variable
+        Column in `df` with prediction target.
+    featurizer
+        A `MolFeaturizer` object.
+    data
+        A dictionary where each key is a column in `df`,
+        and values are the column's values.
+    columns
+        List of columns in `df`
+    dtype
+        Type of `target_variable`.
+        See [sklearn documentation for details](https://scikit-learn.org/stable/modules/generated/sklearn.utils.multiclass.type_of_target.html)
+    job_type
+        Whether the dataset is for a regression or classification task,
+        based on `dtype`.
     """
 
-    def __init__(self, data_path: Union, smiles_column: str, target_variable: str, featurizer: MolFeaturizer,
+    def __init__(self, data_path: str, smiles_column: str, target_variable: str, featurizer: MolFeaturizer,
                  splitter: Splitter):
         super().__init__(pd.read_csv(data_path), smiles_column=smiles_column, target_variable=target_variable,
                          featurizer=featurizer)
@@ -67,15 +134,19 @@ class MolDataset(PandasDataset):
         self.splits = splitter.split(self.df)
 
     @property
-    def all(self):
+    def all(self) -> PandasDataset:
         return self.dataset
 
     @property
-    def train_idx(self):
+    def all_idx(self) -> List[int]:
+        return list(range(len(self.dataset)))
+
+    @property
+    def train_idx(self) -> Dict[str, int]:
         return self.splits['train_idx']
 
     @property
-    def valid_idx(self):
+    def valid_idx(self) -> Dict[str, int]:
         return self.splits['valid_idx']
 
     @property
