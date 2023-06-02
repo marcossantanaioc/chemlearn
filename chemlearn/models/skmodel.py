@@ -24,6 +24,16 @@ class ChemSklearnModel:
     def __init__(self, model):
         self.model = model
 
+    @property
+    def model_name(self):
+        return self.model.__class__.__name__
+
+    @property
+    def model_type(self):
+        if is_classifier(self.model):
+            return 'classifier'
+        return 'regressor'
+
     def fit(self, x, y):
         """
         Trains the model using training set(x, y).
@@ -41,7 +51,7 @@ class ChemSklearnModel:
         """
         Gather predictions from a fitted model.
         """
-        if is_classifier(self.model):
+        if self.model_type == 'classifier':
             return self.model.predict_proba(x)
         else:
             return self.model.predict(x)
@@ -136,9 +146,12 @@ class ChemLearner:
             return x, np.stack(data[self.target_variable])
         return x  # type: ignore
 
-    def fit(self, x, y, params: Optional[Dict[Any, Any]] = None):
+    def fit(self, dataset: Union[MolDataset, PandasDataset, Dict], params: Optional[Dict[Any, Any]] = None):
         if not params:
             params = {}
+
+        x, y = self.get_data(dataset)
+
         self.model.set_params(params)
         self.model.fit(x, y)
         return self
@@ -182,13 +195,13 @@ class ChemLearner:
 
         for fold, (train_split, valid_split) in tqdm(enumerate(cv_iterator.split(self.train_data)), total=n_splits,
                                                      position=0, leave=False):
-            xtrain, ytrain = self.get_data(self.train_data[train_split])
+            # xtrain, ytrain = self.get_data(self.train_data[train_split])
 
             logger.info(f'Fitting on fold {fold}')
             logger.info(f'Training on {len(train_split)} samples.')
             logger.info(f'Validating on {len(valid_split)} samples.')
 
-            self.fit(x=xtrain, y=ytrain)
+            self.fit(self.train_data[train_split])
 
             logger.info(f'Finished fold {fold}')
 
@@ -242,18 +255,7 @@ class ChemLearner:
 
         params = {}  # type: ignore
         gather_metrics = []  # type: ignore
-        estimator = self.model.model
-
-        if hasattr(estimator, 'named_steps'):
-            estimator_name = estimator.steps[-1][1].__class__.__name__
-            estimator = estimator.steps[-1][1]
-
-        elif 'Chain' in estimator.__class__.__name__ and hasattr(estimator, 'base_estimator'):
-            estimator_name = estimator.base_estimator.__class__.__name__
-            estimator = getattr(estimator, 'base_estimator')
-
-        else:
-            estimator_name = estimator.__class__.__name__
+        estimator_name = self.model_name
 
         if estimator_name in ['RandomForestRegressor', 'RandomForestClassifier']:
             params = {'n_estimators': trial.suggest_int('n_estimators', 100, 3000, step=100),
@@ -284,15 +286,6 @@ class ChemLearner:
         elif estimator_name in ['LogisticRegression']:
             params = {'C': trial.suggest_loguniform('C', 1e-3, 1e3)}  # type: ignore
 
-        if hasattr(estimator, 'named_steps'):
-            estimator.steps[-1][1].set_params(**params)
-
-        elif 'Chain' in estimator.__class__.__name__ and hasattr(estimator, 'base_estimator'):
-            estimator.base_estimator.set_params(**params)
-
-        else:
-            estimator.set_params(**params)
-
         score_metric = partial(mean_squared_error, squared=False) if run_type == 'minimize' else matthews_corrcoef
 
         # Cross-validation loop.
@@ -302,18 +295,16 @@ class ChemLearner:
                                                      total=5,
                                                      position=0,
                                                      leave=False):
-            xtrain, ytrain = self.get_data(data)
-
             logger.info(f'Fitting on fold {fold}')
             logger.info(f'Training on {len(train_split)} samples.')
             logger.info(f'Validating on {len(valid_split)} samples.')
 
-            self.fit(x=xtrain, y=ytrain)
+            self.fit(data[train_split], params=params)
 
             logger.info(f'Finished fold {fold}')
 
-            preds = self.predict(self.train_data[valid_split])
-            yvalid = self.train_data[valid_split][self.target_variable]
+            preds = self.predict(data[valid_split])
+            yvalid = data[valid_split][self.target_variable]
 
             score = score_metric(yvalid, preds)
             gather_metrics.append(score)
@@ -360,6 +351,8 @@ class ChemLearner:
         logger.info(f'Algorithm: {self.model_name}')
         logger.info(f'Descriptors: {self.featurizer}')
 
+        logger.info(f'Data size: {len(self.train_data)}')
+
         study = optuna.create_study(direction=run_type,
                                     sampler=TPESampler(),
                                     pruner=MedianPruner(n_warmup_steps=2))
@@ -381,8 +374,7 @@ class ChemLearner:
 
         if refit:
             # Fitting best model
-            x, y = self.get_data(self.train_data)
             print(f'Fitting {self.model_name} with optimized hyperparameters')
-            self.fit(x=x, y=y, params=_best_params)
+            self.fit(self.train_data, params=_best_params)
 
         return _best_params, study
