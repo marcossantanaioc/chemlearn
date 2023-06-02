@@ -261,7 +261,7 @@ class ChemLearner:
                       'min_samples_leaf': trial.suggest_int("min_samples_leaf", 5, 20, step=5),
                       'min_samples_split': trial.suggest_int("min_samples_split", 2, 10, step=2),
                       'max_features': trial.suggest_float("max_features", 0.10, 1.0),
-                      'max_samples': trial.suggest_float('max_samples', 0.25, 0.99)}
+                      'max_samples': trial.suggest_float('max_samples', 0.25, 0.99)}  # type: ignore
 
         elif estimator_name in ['XGBRegressor', 'XGBClassifier']:
             params = {"n_estimators": trial.suggest_int('n_estimators', 100, 3000, step=100),
@@ -271,18 +271,18 @@ class ChemLearner:
                       'min_child_weight': trial.suggest_int('min_child_weight', 1, 10, step=1),
                       'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 1e-1),
                       'colsample_bytree': trial.suggest_discrete_uniform('colsample_bytree', 0.1, 1, 0.1),
-                      }
+                      }  # type: ignore
 
         elif estimator_name in ['KNeighborsRegressor', 'KNeighborsClassifier']:
-            params = {'n_neighbors': trial.suggest_int('n_neighbors', 5, 50, step=5)}
+            params = {'n_neighbors': trial.suggest_int('n_neighbors', 5, 50, step=5)}  # type: ignore
 
         elif estimator_name in ['SVR', 'SVC']:
             params = {'C': trial.suggest_loguniform('C', 1e-3, 1e3),
                       'gamma': trial.suggest_loguniform('gamma', 1e-3, 1e3),
-                      'kernel': 'rbf'}
+                      'kernel': 'rbf'}  # type: ignore
 
         elif estimator_name in ['LogisticRegression']:
-            params = {'C': trial.suggest_loguniform('C', 1e-3, 1e3)}
+            params = {'C': trial.suggest_loguniform('C', 1e-3, 1e3)}  # type: ignore
 
         if hasattr(estimator, 'named_steps'):
             estimator.steps[-1][1].set_params(**params)
