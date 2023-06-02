@@ -94,6 +94,9 @@ class PandasDataset:
         fp = self.featurizer.transform(self.data[self.smiles_column]).tolist()
         _df = pd.DataFrame(self.data)
         _df['features'] = fp
+        _df['smiles_column'] = self.smiles_column
+        _df['target_column'] = self.target_variable
+        _df['featurizer'] = self.featurizer
         self.data = dict(zip(_df.columns, _df.to_numpy().T))
         return self
 

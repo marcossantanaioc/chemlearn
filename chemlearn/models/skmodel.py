@@ -6,9 +6,14 @@ import dill as pickle
 import numpy as np
 import pandas as pd
 from sklearn.base import is_classifier
+import optuna
+from optuna.pruners import MedianPruner
+from optuna.samplers import TPESampler
 from tqdm import tqdm
 from chemlearn.data.dataset import MolDataset, PandasDataset
 from chemlearn.utils.splitters import CrossValidationSplitter, Splitter
+from sklearn.metrics import mean_squared_error, matthews_corrcoef
+from functools import partial
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +23,16 @@ logger.addHandler(logging.NullHandler())
 class ChemSklearnModel:
     def __init__(self, model):
         self.model = model
+
+    @property
+    def model_name(self):
+        return self.model.__class__.__name__
+
+    @property
+    def model_type(self):
+        if is_classifier(self.model):
+            return 'classifier'
+        return 'regressor'
 
     def fit(self, x, y):
         """
@@ -36,7 +51,7 @@ class ChemSklearnModel:
         """
         Gather predictions from a fitted model.
         """
-        if is_classifier(self.model):
+        if self.model_type == 'classifier':
             return self.model.predict_proba(x)
         else:
             return self.model.predict(x)
@@ -118,8 +133,10 @@ class ChemLearner:
         self.dtype = getattr(dataset, 'dtype')
         self.job_type = getattr(dataset, 'job_type')
         self.featurizer = getattr(dataset, 'featurizer')
-        self.c = getattr(dataset, 'c', None)
-        self.classes = getattr(dataset, 'classes', None)
+        self.c = getattr(dataset, 'c')
+        self.classes = getattr(dataset, 'classes')
+        self.model_type = getattr(self.model, 'model_type')
+        self.model_name = getattr(self.model, 'model_name')
 
     def get_data(self, data: Union[MolDataset, PandasDataset, Dict], return_target: bool = True) -> Tuple[Any, Any]:
         if isinstance(data, (MolDataset, PandasDataset)):
@@ -129,9 +146,12 @@ class ChemLearner:
             return x, np.stack(data[self.target_variable])
         return x  # type: ignore
 
-    def fit(self, x, y, params: Optional[Dict[Any, Any]] = None):
+    def fit(self, dataset: Union[MolDataset, PandasDataset, Dict], params: Optional[Dict[Any, Any]] = None):
         if not params:
             params = {}
+
+        x, y = self.get_data(dataset)
+
         self.model.set_params(params)
         self.model.fit(x, y)
         return self
@@ -175,13 +195,13 @@ class ChemLearner:
 
         for fold, (train_split, valid_split) in tqdm(enumerate(cv_iterator.split(self.train_data)), total=n_splits,
                                                      position=0, leave=False):
-            xtrain, ytrain = self.get_data(self.train_data[train_split])
+            # xtrain, ytrain = self.get_data(self.train_data[train_split])
 
             logger.info(f'Fitting on fold {fold}')
             logger.info(f'Training on {len(train_split)} samples.')
             logger.info(f'Validating on {len(valid_split)} samples.')
 
-            self.fit(x=xtrain, y=ytrain)
+            self.fit(self.train_data[train_split])
 
             logger.info(f'Finished fold {fold}')
 
@@ -195,24 +215,166 @@ class ChemLearner:
         cv_results = pd.DataFrame(gather_metrics)
 
         logger.debug(cv_results)
-        logger.debug(f'##################################################################')
-        logger.info(f'##################################################################')
 
         return cv_results
 
-# if __name__ == "__main__":  # type: ignore
-#     from sklearn.ensemble import RandomForestRegressor
-#     from chemlearn.utils.splitters import TrainTestSplitter
-#     from cheminftools.tools.featurizer import MolFeaturizer
-#     from chemlearn.models.validation.metrics import MSEScore
-#
-#     m = RandomForestRegressor()
-#     splitter = TrainTestSplitter()
-#     featurizer = MolFeaturizer('morgan')
-#     moldataset = MolDataset(data_path='/home/marcossantana/PycharmProjects/cheminftools/data/data.csv',
-#                             smiles_column='smiles', target_variable='pIC50', featurizer=featurizer, splitter=splitter)
-#     metric = MSEScore(squared=False)
-#
-#     chemmodel = ChemLearner(m, dataset=moldataset, metric=metric)
-#     cv_results = chemmodel.cross_val(splitter=splitter, n_splits=5)
-#     print(cv_results)
+    @property
+    def optimization_type(self):
+        if self.model_type == 'regressor':
+            return 'minimize'
+        return 'maximize'
+
+    def objective(self, trial: optuna.Trial, data: PandasDataset, splitter: Splitter, run_type: str):
+
+        """
+        Objective function to run
+        hyperparameter optimization on
+        a dataset.
+
+        Parameters
+        ----------
+        trial
+            An optuna trial.
+            This will be set automatically by optuna.study.optimize.
+        data
+            a MolDataset object.
+        splitter
+            splitter strategy to use.
+        run_type
+            Type of optimization run.
+            If 'maximize', optuna will try to increase
+            the performance metric.
+            If 'minimize', optuna will decrease the
+            performance metric.
+
+        Returns
+        -------
+        score : float
+            Final score of Optuna optimization.
+        """
+
+        params = {}  # type: ignore
+        gather_metrics = []  # type: ignore
+        estimator_name = self.model_name
+
+        if estimator_name in ['RandomForestRegressor', 'RandomForestClassifier']:
+            params = {'n_estimators': trial.suggest_int('n_estimators', 100, 3000, step=100),
+                      'max_depth': trial.suggest_int("max_depth", 2, 20, step=2),
+                      'min_samples_leaf': trial.suggest_int("min_samples_leaf", 5, 20, step=5),
+                      'min_samples_split': trial.suggest_int("min_samples_split", 2, 10, step=2),
+                      'max_features': trial.suggest_float("max_features", 0.10, 1.0),
+                      'max_samples': trial.suggest_float('max_samples', 0.25, 0.99)}  # type: ignore
+
+        elif estimator_name in ['XGBRegressor', 'XGBClassifier']:
+            params = {"n_estimators": trial.suggest_int('n_estimators', 100, 3000, step=100),
+                      'max_depth': trial.suggest_int('max_depth', 2, 20, step=2),
+                      'reg_alpha': trial.suggest_loguniform('reg_alpha', 1e-3, 1e2),
+                      'reg_lambda': trial.suggest_loguniform('reg_lambda', 1e-3, 1e2),
+                      'min_child_weight': trial.suggest_int('min_child_weight', 1, 10, step=1),
+                      'learning_rate': trial.suggest_loguniform('learning_rate', 1e-3, 1e-1),
+                      'colsample_bytree': trial.suggest_discrete_uniform('colsample_bytree', 0.1, 1, 0.1),
+                      }  # type: ignore
+
+        elif estimator_name in ['KNeighborsRegressor', 'KNeighborsClassifier']:
+            params = {'n_neighbors': trial.suggest_int('n_neighbors', 5, 50, step=5)}  # type: ignore
+
+        elif estimator_name in ['SVR', 'SVC']:
+            params = {'C': trial.suggest_loguniform('C', 1e-3, 1e3),
+                      'gamma': trial.suggest_loguniform('gamma', 1e-3, 1e3),
+                      'kernel': 'rbf'}  # type: ignore
+
+        elif estimator_name in ['LogisticRegression']:
+            params = {'C': trial.suggest_loguniform('C', 1e-3, 1e3)}  # type: ignore
+
+        score_metric = partial(mean_squared_error, squared=False) if run_type == 'minimize' else matthews_corrcoef
+
+        # Cross-validation loop.
+        logger.info(f'Hyperparameters: {params}')
+
+        for fold, (train_split, valid_split) in tqdm(enumerate(splitter.split(data)),
+                                                     total=5,
+                                                     position=0,
+                                                     leave=False):
+            logger.info(f'Fitting on fold {fold}')
+            logger.info(f'Training on {len(train_split)} samples.')
+            logger.info(f'Validating on {len(valid_split)} samples.')
+
+            self.fit(data[train_split], params=params)
+
+            logger.info(f'Finished fold {fold}')
+
+            preds = self.predict(data[valid_split])
+            yvalid = data[valid_split][self.target_variable]
+
+            score = score_metric(yvalid, preds)
+            gather_metrics.append(score)
+
+        avg_score = np.mean(gather_metrics)
+        return avg_score
+
+    def cross_val_optim(self,
+                        splitter: Splitter,
+                        n_splits: int = 10,
+                        n_trials: int = 20,
+                        refit: bool = True):
+
+        """
+        Helper function to run cross-validation with hyperparameter optimization using Optuna.
+        If refit is True, the model will be retrained using the best hyperparameters found.
+
+        Parameters
+        ----------
+        splitter
+            An iterator to generate cross-validation folds.
+        n_splits
+            The number of cross-validation folds.
+        n_trials
+            The number of optimization trials
+        refit
+            Whether to refit the model with best hyperparameters.
+
+        Returns
+        -------
+        best_params, study : dict, `optuna.study`
+
+            Returns the best parameters and an optuna study.
+
+
+        """
+        run_type = self.optimization_type
+        cv_iterator = CrossValidationSplitter(splitter=splitter, n_splits=n_splits)
+
+        logger.info(
+            f'Hyperparameter optimization\nEstimator: {self.model_name}\n'
+            f'Number of Optuna trials: {n_trials}\n'
+            f'Objective: {run_type}')
+        logger.info(f'Algorithm: {self.model_name}')
+        logger.info(f'Descriptors: {self.featurizer}')
+
+        logger.info(f'Data size: {len(self.train_data)}')
+
+        study = optuna.create_study(direction=run_type,
+                                    sampler=TPESampler(),
+                                    pruner=MedianPruner(n_warmup_steps=2))
+
+        study.optimize(partial(self.objective,
+                               data=self.train_data,
+                               splitter=cv_iterator,
+                               run_type=run_type),
+                       n_trials=n_trials, n_jobs=4)
+
+        _best_params = study.best_params
+
+        logger.info('Study results - Dataframe')
+        logger.info(study.trials_dataframe())
+        logger.info('\n')
+
+        logger.info(f'Best score:  {study.best_value}')
+        logger.info(f'Best params:  {_best_params}')
+
+        if refit:
+            # Fitting best model
+            print(f'Fitting {self.model_name} with optimized hyperparameters')
+            self.fit(self.train_data, params=_best_params)
+
+        return _best_params, study
