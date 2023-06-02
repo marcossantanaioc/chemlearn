@@ -42,8 +42,28 @@ dataset = MolDataset(data_path=csv_path, smiles_column=smiles_column, target_var
 from chemlearn.models.skmodel import ChemLearner
 from sklearn.ensemble import RandomForestRegressor
 from chemlearn.models.validation.metrics import R2Score
+from chemlearn.data.dataset import MolDataset
+from cheminftools.tools.featurizer import MolFeaturizer
+from chemlearn.utils.splitters import TrainTestSplitter
 
 metric = R2Score()
+# Input data
+csv_path = 'example_data.csv'
+
+# Column with SMILES
+smiles_column = 'smiles'
+
+# Prediction target
+target_column = 'pIC50'
+
+# Define splitting strategy
+splitter = TrainTestSplitter(test_size=0.2)
+
+# Define featurizer
+featurizer = MolFeaturizer(descriptor_type='morgan', params={'radius':3, 'fpSize': 2048})
+
+dataset = MolDataset(data_path=csv_path, smiles_column=smiles_column, target_variable=target_column, splitter=splitter, featurizer=featurizer)
+
 chem_learner = ChemLearner(model=RandomForestRegressor(), dataset=dataset, metric=metric)
-chem_learner.fit()
+chem_learner.fit(dataset)
 ```
