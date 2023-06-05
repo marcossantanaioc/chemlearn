@@ -16,15 +16,16 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.x'
+          cache: 'pip'
       - uses: actions/checkout@v3
-      - name: Caching dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Install
+#      - name: Caching dependencies
+#        uses: actions/cache@v3
+#        with:
+#          path: ~/.cache/pip
+#          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+#          restore-keys: |
+#            ${{ runner.os }}-pip-
+      - name: Install package & dependencies
         run: |
           echo "Installing chemtools"
           python -m pip install --upgrade pip
