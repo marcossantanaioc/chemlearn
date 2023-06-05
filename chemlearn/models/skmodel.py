@@ -214,7 +214,7 @@ class ChemLearner:
 
         cv_results = pd.DataFrame(gather_metrics)
 
-        logger.debug(cv_results)
+        logger.info(cv_results)
 
         return cv_results
 
